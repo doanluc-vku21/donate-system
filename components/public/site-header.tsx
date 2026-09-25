@@ -43,14 +43,14 @@ export default function SiteHeader() {
           </Link>
 
           <Link
-            href="/#how-it-works"
+            href="/how-it-works"
             className="text-sm font-medium text-neutral-700 transition hover:text-[#173f35]"
           >
             How It Works
           </Link>
 
           <Link
-            href="/#updates"
+            href="/updates"
             className="text-sm font-medium text-neutral-700 transition hover:text-[#173f35]"
           >
             Updates
@@ -64,7 +64,7 @@ export default function SiteHeader() {
           </Link>
 
           <Link
-            href="/#faq"
+            href="/faq"
             className="text-sm font-medium text-neutral-700 transition hover:text-[#173f35]"
           >
             FAQ

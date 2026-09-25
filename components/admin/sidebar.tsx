@@ -155,6 +155,50 @@ const contentItems: MenuItem[] = [
       </svg>
     ),
   },
+
+  {
+    name: 'FAQ',
+    href: '/admin/faq',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <circle
+          cx="12"
+          cy="12"
+          r="9"
+        />
+
+        <path d="M9.8 9a2.4 2.4 0 0 1 4.5 1.2c0 1.8-2.3 2-2.3 3.8" />
+
+        <path d="M12 17h.01" />
+      </svg>
+    ),
+  },
+
+  {
+    name: 'Updates',
+    href: '/admin/updates',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <path d="M4 6h16" />
+
+        <path d="M4 12h16" />
+
+        <path d="M4 18h10" />
+      </svg>
+    ),
+  },
 ]
 
 function AdminMenuLink({
@@ -220,9 +264,7 @@ export default function AdminSidebar() {
           {overviewItems.map(
             (item) => (
               <AdminMenuLink
-                key={
-                  item.href
-                }
+                key={item.href}
                 item={item}
               />
             )
@@ -239,9 +281,7 @@ export default function AdminSidebar() {
           {fundraisingItems.map(
             (item) => (
               <AdminMenuLink
-                key={
-                  item.href
-                }
+                key={item.href}
                 item={item}
               />
             )
@@ -258,35 +298,25 @@ export default function AdminSidebar() {
           {contentItems.map(
             (item) => (
               <AdminMenuLink
-                key={
-                  item.href
-                }
+                key={item.href}
                 item={item}
               />
             )
           )}
+        </div>
 
-          {/* FUTURE FEATURES */}
+        {/* WEBSITE */}
 
-          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            <svg
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.8"
-              className="h-5 w-5"
-            >
-              <path d="M4 6h16" />
-              <path d="M4 12h16" />
-              <path d="M4 18h10" />
-            </svg>
+        <p className="mb-2 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
+          Website
+        </p>
 
-            <span>
-              Updates
-            </span>
-          </div>
-
-          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
+        <div className="space-y-1">
+          <Link
+            href="/"
+            target="_blank"
+            className="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium text-neutral-600 transition hover:bg-neutral-100 hover:text-neutral-950"
+          >
             <svg
               viewBox="0 0 24 24"
               fill="none"
@@ -300,15 +330,31 @@ export default function AdminSidebar() {
                 r="9"
               />
 
-              <path d="M9.8 9a2.4 2.4 0 0 1 4.5 1.2c0 1.8-2.3 2-2.3 3.8" />
+              <path d="M3 12h18" />
 
-              <path d="M12 17h.01" />
+              <path d="M12 3a15 15 0 0 1 0 18" />
+
+              <path d="M12 3a15 15 0 0 0 0 18" />
             </svg>
 
             <span>
-              FAQ
+              View website
             </span>
-          </div>
+
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="ml-auto h-4 w-4"
+            >
+              <path d="M14 5h5v5" />
+
+              <path d="M10 14 19 5" />
+
+              <path d="M19 14v5H5V5h5" />
+            </svg>
+          </Link>
         </div>
       </nav>
     </aside>

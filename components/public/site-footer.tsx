@@ -30,7 +30,7 @@ export default function SiteFooter() {
 
               <Link
                 className="block hover:text-[#173f35]"
-                href="/#how-it-works"
+                href="/how-it-works"
               >
                 How It Works
               </Link>
