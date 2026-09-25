@@ -4,6 +4,8 @@ export default function SiteHeader() {
   return (
     <header className="sticky top-0 z-50 border-b border-neutral-200/80 bg-[#fffdf8]/95 backdrop-blur">
       <div className="mx-auto flex h-20 max-w-7xl items-center justify-between px-5 lg:px-8">
+        {/* LOGO */}
+
         <Link
           href="/"
           className="flex items-center gap-3"
@@ -23,12 +25,21 @@ export default function SiteHeader() {
           </div>
         </Link>
 
+        {/* DESKTOP NAV */}
+
         <nav className="hidden items-center gap-7 lg:flex">
           <Link
             href="/campaigns"
             className="text-sm font-medium text-neutral-700 transition hover:text-[#173f35]"
           >
             Campaigns
+          </Link>
+
+          <Link
+            href="/news"
+            className="text-sm font-medium text-neutral-700 transition hover:text-[#173f35]"
+          >
+            News
           </Link>
 
           <Link
@@ -59,6 +70,8 @@ export default function SiteHeader() {
             FAQ
           </Link>
         </nav>
+
+        {/* ACTIONS */}
 
         <div className="flex items-center gap-3">
           <Link

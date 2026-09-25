@@ -9,6 +9,7 @@ import CampaignGallery from '@/components/public/campaign-gallery'
 import CampaignFundUsage from '@/components/public/campaign-fund-usage'
 import CampaignUpdates from '@/components/public/campaign-updates'
 import DonationPanel from '@/components/public/donation-panel'
+import RecentContributions from '@/components/public/recent-contributions'
 
 type PageProps = {
   params: Promise<{
@@ -162,7 +163,47 @@ export default async function CampaignDetailPage({
         nullsFirst: false,
       }
     )
+  // =========================
+  // RECENT CONTRIBUTIONS
+  // =========================
 
+  const {
+    data: contributions,
+    error: contributionsError,
+  } = await supabase
+    .from('donations')
+    .select(`
+      id,
+      display_name,
+      amount_cents,
+      currency,
+      frequency,
+      message,
+      is_anonymous,
+      created_at
+    `)
+    .eq(
+      'campaign_id',
+      campaign.id
+    )
+    .eq(
+      'status',
+      'paid'
+    )
+    .order(
+      'created_at',
+      {
+        ascending: false,
+      }
+    )
+    .limit(10)
+
+  if (contributionsError) {
+    console.error(
+      'Recent contributions error:',
+      contributionsError
+    )
+  }
   // =========================
   // DONATION SETTINGS
   // =========================
@@ -394,28 +435,15 @@ export default async function CampaignDetailPage({
                 </section>
               )}
 
-            {/* CONTRIBUTIONS PLACEHOLDER */}
+            {/* RECENT CONTRIBUTIONS */}
 
-            <section className="border-b border-neutral-200 py-9">
-              <div className="flex items-center justify-between">
-                <h2 className="text-2xl font-bold tracking-[-0.03em] text-[#111]">
-                  Contributions
-                </h2>
-
-                <span className="text-xs text-neutral-400">
-                  Coming soon
-                </span>
-              </div>
-
-              <div className="mt-5 rounded-xl border border-dashed border-neutral-200 px-5 py-8 text-center">
-                <p className="text-sm text-neutral-500">
-                  Recent donations will
-                  appear here once the
-                  donation flow is
-                  connected.
-                </p>
-              </div>
-            </section>
+<section className="border-b border-neutral-200 py-9">
+  <RecentContributions
+    contributions={
+      contributions ?? []
+    }
+  />
+</section>
 
             {/* COMMENTS PLACEHOLDER */}
 

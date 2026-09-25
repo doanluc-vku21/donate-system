@@ -3,7 +3,13 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 
-const menuItems = [
+type MenuItem = {
+  name: string
+  href: string
+  icon: React.ReactNode
+}
+
+const overviewItems: MenuItem[] = [
   {
     name: 'Dashboard',
     href: '/admin',
@@ -15,13 +21,41 @@ const menuItems = [
         strokeWidth="1.8"
         className="h-5 w-5"
       >
-        <rect x="3" y="3" width="7" height="7" rx="1" />
-        <rect x="14" y="3" width="7" height="7" rx="1" />
-        <rect x="3" y="14" width="7" height="7" rx="1" />
-        <rect x="14" y="14" width="7" height="7" rx="1" />
+        <rect
+          x="3"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+
+        <rect
+          x="14"
+          y="3"
+          width="7"
+          height="7"
+          rx="1"
+        />
+
+        <rect
+          x="3"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
+
+        <rect
+          x="14"
+          y="14"
+          width="7"
+          height="7"
+          rx="1"
+        />
       </svg>
     ),
   },
+
   {
     name: 'Campaigns',
     href: '/admin/campaigns',
@@ -39,11 +73,128 @@ const menuItems = [
   },
 ]
 
-export default function AdminSidebar() {
-  const pathname = usePathname()
+const fundraisingItems: MenuItem[] = [
+  {
+    name: 'Donations',
+    href: '/admin/donations',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <rect
+          x="3"
+          y="5"
+          width="18"
+          height="14"
+          rx="2"
+        />
+
+        <path d="M3 9h18" />
+
+        <path d="M7 15h3" />
+      </svg>
+    ),
+  },
+
+  {
+    name: 'Donors',
+    href: '/admin/donors',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <circle
+          cx="9"
+          cy="8"
+          r="3"
+        />
+
+        <path d="M3.5 19c.7-3.2 2.6-5 5.5-5s4.8 1.8 5.5 5" />
+
+        <path d="M16 7h5" />
+
+        <path d="M18.5 4.5v5" />
+      </svg>
+    ),
+  },
+]
+
+const contentItems: MenuItem[] = [
+  {
+    name: 'Blog / News',
+    href: '/admin/news',
+    icon: (
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        className="h-5 w-5"
+      >
+        <rect
+          x="4"
+          y="4"
+          width="16"
+          height="16"
+          rx="2"
+        />
+
+        <path d="M8 9h8" />
+
+        <path d="M8 13h8" />
+
+        <path d="M8 17h5" />
+      </svg>
+    ),
+  },
+]
+
+function AdminMenuLink({
+  item,
+}: {
+  item: MenuItem
+}) {
+  const pathname =
+    usePathname()
+
+  const active =
+    item.href === '/admin'
+      ? pathname === '/admin'
+      : pathname.startsWith(
+          item.href
+        )
 
   return (
+    <Link
+      href={item.href}
+      className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
+        active
+          ? 'bg-neutral-900 text-white'
+          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'
+      }`}
+    >
+      {item.icon}
+
+      <span>
+        {item.name}
+      </span>
+    </Link>
+  )
+}
+
+export default function AdminSidebar() {
+  return (
     <aside className="fixed left-0 top-0 z-30 hidden h-screen w-64 border-r border-neutral-200 bg-white lg:block">
+      {/* BRAND */}
+
       <div className="flex h-20 items-center border-b border-neutral-200 px-6">
         <Link href="/admin">
           <div className="text-xl font-bold text-neutral-950">
@@ -56,65 +207,107 @@ export default function AdminSidebar() {
         </Link>
       </div>
 
-      <nav className="p-4">
+      {/* NAV */}
+
+      <nav className="h-[calc(100vh-5rem)] overflow-y-auto p-4">
+        {/* OVERVIEW */}
+
         <p className="mb-2 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
           Overview
         </p>
 
         <div className="space-y-1">
-          {menuItems.map((item) => {
-            const active =
-              item.href === '/admin'
-                ? pathname === '/admin'
-                : pathname.startsWith(item.href)
-
-            return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition ${
-                  active
-                    ? 'bg-neutral-900 text-white'
-                    : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950'
-                }`}
-              >
-                {item.icon}
-
-                <span>{item.name}</span>
-              </Link>
+          {overviewItems.map(
+            (item) => (
+              <AdminMenuLink
+                key={
+                  item.href
+                }
+                item={item}
+              />
             )
-          })}
+          )}
         </div>
+
+        {/* FUNDRAISING */}
 
         <p className="mb-2 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
           Fundraising
         </p>
 
         <div className="space-y-1">
-          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            Donations
-          </div>
-
-          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            Donors
-          </div>
+          {fundraisingItems.map(
+            (item) => (
+              <AdminMenuLink
+                key={
+                  item.href
+                }
+                item={item}
+              />
+            )
+          )}
         </div>
+
+        {/* CONTENT */}
 
         <p className="mb-2 mt-8 px-3 text-xs font-semibold uppercase tracking-wider text-neutral-400">
           Content
         </p>
 
         <div className="space-y-1">
-          <div className="rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            Blog / News
+          {contentItems.map(
+            (item) => (
+              <AdminMenuLink
+                key={
+                  item.href
+                }
+                item={item}
+              />
+            )
+          )}
+
+          {/* FUTURE FEATURES */}
+
+          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-5 w-5"
+            >
+              <path d="M4 6h16" />
+              <path d="M4 12h16" />
+              <path d="M4 18h10" />
+            </svg>
+
+            <span>
+              Updates
+            </span>
           </div>
 
-          <div className="rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            Updates
-          </div>
+          <div className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm text-neutral-400">
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              className="h-5 w-5"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+              />
 
-          <div className="rounded-lg px-3 py-2.5 text-sm text-neutral-400">
-            FAQ
+              <path d="M9.8 9a2.4 2.4 0 0 1 4.5 1.2c0 1.8-2.3 2-2.3 3.8" />
+
+              <path d="M12 17h.01" />
+            </svg>
+
+            <span>
+              FAQ
+            </span>
           </div>
         </div>
       </nav>

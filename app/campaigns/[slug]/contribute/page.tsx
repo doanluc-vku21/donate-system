@@ -14,13 +14,13 @@ type PageProps = {
 export default async function ContributePage({
   params,
 }: PageProps) {
-  const { slug } =
-    await params
+  const { slug } = await params
 
-  const supabase =
-    await createClient()
+  const supabase = await createClient()
 
+  // =========================
   // CAMPAIGN
+  // =========================
 
   const {
     data: campaign,
@@ -48,13 +48,21 @@ export default async function ContributePage({
     campaignError ||
     !campaign
   ) {
+    console.error(
+      'Campaign load error:',
+      campaignError
+    )
+
     notFound()
   }
 
-  // SETTINGS
+  // =========================
+  // DONATION SETTINGS
+  // =========================
 
   const {
     data: settings,
+    error: settingsError,
   } = await supabase
     .from(
       'campaign_donation_settings'
@@ -74,10 +82,20 @@ export default async function ContributePage({
     )
     .maybeSingle()
 
-  // OPTIONS
+  if (settingsError) {
+    console.error(
+      'Donation settings error:',
+      settingsError
+    )
+  }
+
+  // =========================
+  // DONATION OPTIONS
+  // =========================
 
   const {
     data: options,
+    error: optionsError,
   } = await supabase
     .from(
       'campaign_donation_options'
@@ -104,6 +122,39 @@ export default async function ContributePage({
         ascending: true,
       }
     )
+
+  if (optionsError) {
+    console.error(
+      'Donation options error:',
+      optionsError
+    )
+  }
+
+  // =========================
+  // DEBUG
+  // =========================
+
+  console.log(
+    'CONTRIBUTE CAMPAIGN:',
+    {
+      id: campaign.id,
+      slug: campaign.slug,
+    }
+  )
+
+  console.log(
+    'CONTRIBUTE SETTINGS:',
+    settings
+  )
+
+  console.log(
+    'CONTRIBUTE OPTIONS:',
+    options
+  )
+
+  // =========================
+  // PAGE
+  // =========================
 
   return (
     <main className="min-h-screen bg-[#fffef9] px-5 py-10 sm:py-14">
