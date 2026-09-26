@@ -1,10 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server'
+import {
+  NextRequest,
+  NextResponse,
+} from 'next/server'
+
 import Stripe from 'stripe'
 
-import { stripe } from '@/lib/stripe'
-import { supabaseAdmin } from '@/lib/supabase/admin'
+import {
+  stripe,
+} from '@/lib/stripe'
 
-export const runtime = 'nodejs'
+import {
+  supabaseAdmin,
+} from '@/lib/supabase/admin'
+
+import {
+  sendDonationConfirmationEmail,
+} from '@/lib/donation-email'
+
+import {
+  syncMonthlySubscription,
+} from '@/lib/subscriptions'
+
+export const runtime =
+  'nodejs'
 
 type DonationMetadata = {
   campaign_id?: string
@@ -13,7 +31,9 @@ type DonationMetadata = {
   donation_amount_cents?: string
   fee_amount_cents?: string
 
-  frequency?: 'one_time' | 'monthly'
+  frequency?:
+    | 'one_time'
+    | 'monthly'
 
   anonymous?: string
 
@@ -24,13 +44,19 @@ type DonationMetadata = {
   donor_message?: string
 }
 
-function normalizeEmail(value?: string | null) {
-  return String(value || '')
+function normalizeEmail(
+  value?: string | null
+) {
+  return String(
+    value || ''
+  )
     .trim()
     .toLowerCase()
 }
 
-function metadataBoolean(value?: string) {
+function metadataBoolean(
+  value?: string
+) {
   return value === 'true'
 }
 
@@ -75,7 +101,10 @@ async function getOrCreateDonor(
       id,
       email
     `)
-    .eq('email', email)
+    .eq(
+      'email',
+      email
+    )
     .maybeSingle()
 
   if (existingError) {
@@ -85,21 +114,27 @@ async function getOrCreateDonor(
   }
 
   if (existing) {
-    const { error: updateError } =
+    const {
+      error: updateError,
+    } =
       await supabaseAdmin
         .from('donors')
         .update({
           first_name:
-            firstName || null,
+            firstName ||
+            null,
 
           last_name:
-            lastName || null,
+            lastName ||
+            null,
 
           phone:
-            phone || null,
+            phone ||
+            null,
 
           updated_at:
-            new Date().toISOString(),
+            new Date()
+              .toISOString(),
         })
         .eq(
           'id',
@@ -124,15 +159,20 @@ async function getOrCreateDonor(
       email,
 
       first_name:
-        firstName || null,
+        firstName ||
+        null,
 
       last_name:
-        lastName || null,
+        lastName ||
+        null,
 
       phone:
-        phone || null,
+        phone ||
+        null,
     })
-    .select('id')
+    .select(
+      'id'
+    )
     .single()
 
   if (
@@ -140,7 +180,8 @@ async function getOrCreateDonor(
     !created
   ) {
     throw new Error(
-      createError?.message ||
+      createError
+        ?.message ||
         'Unable to create donor.'
     )
   }
@@ -156,10 +197,12 @@ function parseDonationMetadata(
 ): DonationMetadata {
   return {
     campaign_id:
-      metadata?.campaign_id,
+      metadata
+        ?.campaign_id,
 
     campaign_slug:
-      metadata?.campaign_slug,
+      metadata
+        ?.campaign_slug,
 
     donation_amount_cents:
       metadata
@@ -177,7 +220,8 @@ function parseDonationMetadata(
         | undefined,
 
     anonymous:
-      metadata?.anonymous,
+      metadata
+        ?.anonymous,
 
     donor_first_name:
       metadata
@@ -188,10 +232,12 @@ function parseDonationMetadata(
         ?.donor_last_name,
 
     donor_email:
-      metadata?.donor_email,
+      metadata
+        ?.donor_email,
 
     donor_phone:
-      metadata?.donor_phone,
+      metadata
+        ?.donor_phone,
 
     donor_message:
       metadata
@@ -204,7 +250,8 @@ function validateMetadata(
 ) {
   const campaignId =
     String(
-      metadata.campaign_id ||
+      metadata
+        .campaign_id ||
         ''
     )
 
@@ -217,7 +264,8 @@ function validateMetadata(
   const feeAmountCents =
     Number(
       metadata
-        .fee_amount_cents || 0
+        .fee_amount_cents ||
+        0
     )
 
   if (!campaignId) {
@@ -260,9 +308,11 @@ async function incrementCampaignRaised(
   amountCents: number
 ) {
   /*
-   * Trước mắt dùng read + update.
-   * Sau này production nên đổi sang Postgres RPC
-   * để increment atomic khi traffic cao.
+   * Hiện tại vẫn dùng:
+   * read -> update.
+   *
+   * Phase sau sẽ đổi sang
+   * Postgres RPC atomic.
    */
 
   const {
@@ -291,11 +341,15 @@ async function incrementCampaignRaised(
 
   const current =
     Number(
-      campaign.raised_amount_cents ||
+      campaign
+        .raised_amount_cents ||
         0
     )
 
-  const { error: updateError } =
+  const {
+    error:
+      updateError,
+  } =
     await supabaseAdmin
       .from('campaigns')
       .update({
@@ -304,7 +358,8 @@ async function incrementCampaignRaised(
           amountCents,
 
         updated_at:
-          new Date().toISOString(),
+          new Date()
+            .toISOString(),
       })
       .eq(
         'id',
@@ -318,6 +373,158 @@ async function incrementCampaignRaised(
   }
 }
 
+/* =========================================================
+   DONATION CONFIRMATION EMAIL
+========================================================= */
+
+async function sendConfirmationForDonation(
+  donationId: string
+) {
+  const {
+    data: donation,
+    error,
+  } = await supabaseAdmin
+    .from('donations')
+    .select(`
+      id,
+
+      donor_id,
+
+      amount_cents,
+      fee_amount_cents,
+      total_amount_cents,
+
+      currency,
+      frequency,
+
+      confirmation_email_sent_at,
+
+      created_at,
+
+      campaign:campaigns (
+        title,
+        slug
+      ),
+
+      donor:donors (
+        email,
+        first_name
+      )
+    `)
+    .eq(
+      'id',
+      donationId
+    )
+    .single()
+
+  if (
+    error ||
+    !donation
+  ) {
+    throw new Error(
+      error?.message ||
+        'Donation not found for confirmation email.'
+    )
+  }
+
+  if (
+    donation
+      .confirmation_email_sent_at
+  ) {
+    return
+  }
+
+  const donor =
+    Array.isArray(
+      donation.donor
+    )
+      ? donation
+          .donor[0]
+      : donation.donor
+
+  const campaign =
+    Array.isArray(
+      donation.campaign
+    )
+      ? donation
+          .campaign[0]
+      : donation.campaign
+
+  if (
+    !donor?.email ||
+    !campaign
+  ) {
+    throw new Error(
+      'Donation confirmation data is incomplete.'
+    )
+  }
+
+  const emailId =
+    await sendDonationConfirmationEmail({
+      donationId:
+        donation.id,
+
+      donorEmail:
+        donor.email,
+
+      donorFirstName:
+        donor.first_name,
+
+      campaignTitle:
+        campaign.title,
+
+      campaignSlug:
+        campaign.slug,
+
+      amountCents:
+        donation.amount_cents,
+
+      feeAmountCents:
+        donation.fee_amount_cents,
+
+      totalAmountCents:
+        donation.total_amount_cents,
+
+      currency:
+        donation.currency,
+
+      frequency:
+        donation.frequency,
+
+      createdAt:
+        donation.created_at,
+    })
+
+  const {
+    error:
+      updateError,
+  } =
+    await supabaseAdmin
+      .from('donations')
+      .update({
+        confirmation_email_sent_at:
+          new Date()
+            .toISOString(),
+
+        confirmation_email_id:
+          emailId,
+      })
+      .eq(
+        'id',
+        donation.id
+      )
+
+  if (updateError) {
+    throw new Error(
+      updateError.message
+    )
+  }
+}
+
+/* =========================================================
+   CREATE DONATION
+========================================================= */
+
 async function createDonation({
   metadata,
   currency,
@@ -326,7 +533,9 @@ async function createDonation({
   subscriptionId,
   invoiceId,
 }: {
-  metadata: DonationMetadata
+  metadata:
+    DonationMetadata
+
   currency: string
 
   checkoutSessionId?:
@@ -354,43 +563,71 @@ async function createDonation({
       metadata
     )
 
-  /*
-   * IDEMPOTENCY CHECK
-   */
+  /* =========================
+     IDEMPOTENCY - INVOICE
+  ========================= */
 
   if (invoiceId) {
     const {
       data: existing,
-    } = await supabaseAdmin
-      .from('donations')
-      .select('id')
-      .eq(
-        'stripe_invoice_id',
-        invoiceId
-      )
-      .maybeSingle()
+    } =
+      await supabaseAdmin
+        .from(
+          'donations'
+        )
+        .select(
+          'id'
+        )
+        .eq(
+          'stripe_invoice_id',
+          invoiceId
+        )
+        .maybeSingle()
 
     if (existing) {
+      await sendConfirmationForDonation(
+        existing.id
+      )
+
       return
     }
   }
 
-  if (paymentIntentId) {
+  /* =========================
+     IDEMPOTENCY - PAYMENT
+  ========================= */
+
+  if (
+    paymentIntentId
+  ) {
     const {
       data: existing,
-    } = await supabaseAdmin
-      .from('donations')
-      .select('id')
-      .eq(
-        'stripe_payment_intent_id',
-        paymentIntentId
-      )
-      .maybeSingle()
+    } =
+      await supabaseAdmin
+        .from(
+          'donations'
+        )
+        .select(
+          'id'
+        )
+        .eq(
+          'stripe_payment_intent_id',
+          paymentIntentId
+        )
+        .maybeSingle()
 
     if (existing) {
+      await sendConfirmationForDonation(
+        existing.id
+      )
+
       return
     }
   }
+
+  /* =========================
+     DONOR
+  ========================= */
 
   const donorId =
     await getOrCreateDonor(
@@ -399,18 +636,21 @@ async function createDonation({
 
   const anonymous =
     metadataBoolean(
-      metadata.anonymous
+      metadata
+        .anonymous
     )
 
   const firstName =
     String(
-      metadata.donor_first_name ||
+      metadata
+        .donor_first_name ||
         ''
     ).trim()
 
   const lastName =
     String(
-      metadata.donor_last_name ||
+      metadata
+        .donor_last_name ||
         ''
     ).trim()
 
@@ -426,110 +666,133 @@ async function createDonation({
       ? 'monthly'
       : 'one_time'
 
+  /* =========================
+     INSERT DONATION
+  ========================= */
+
   const {
     data: inserted,
-    error: insertError,
-  } = await supabaseAdmin
-    .from('donations')
-    .insert({
-      campaign_id:
-        campaignId,
+    error:
+      insertError,
+  } =
+    await supabaseAdmin
+      .from(
+        'donations'
+      )
+      .insert({
+        campaign_id:
+          campaignId,
 
-      donor_id:
-        donorId,
+        donor_id:
+          donorId,
 
-      display_name:
-        displayName,
+        display_name:
+          displayName,
 
-      message:
-        String(
-          metadata
-            .donor_message ||
-            ''
-        ).trim() ||
-        null,
+        message:
+          String(
+            metadata
+              .donor_message ||
+              ''
+          ).trim() ||
+          null,
 
-      is_anonymous:
-        anonymous,
+        is_anonymous:
+          anonymous,
 
-      frequency,
+        frequency,
 
-      amount_cents:
-        amountCents,
+        amount_cents:
+          amountCents,
 
-      fee_amount_cents:
-        feeAmountCents,
+        fee_amount_cents:
+          feeAmountCents,
 
-      total_amount_cents:
-        amountCents +
-        feeAmountCents,
+        total_amount_cents:
+          amountCents +
+          feeAmountCents,
 
-      currency:
-        currency.toUpperCase(),
+        currency:
+          currency
+            .toUpperCase(),
 
-      status:
-        'paid',
+        status:
+          'paid',
 
-      stripe_checkout_session_id:
-        checkoutSessionId ||
-        null,
+        stripe_checkout_session_id:
+          checkoutSessionId ||
+          null,
 
-      stripe_payment_intent_id:
-        paymentIntentId ||
-        null,
+        stripe_payment_intent_id:
+          paymentIntentId ||
+          null,
 
-      stripe_subscription_id:
-        subscriptionId ||
-        null,
+        stripe_subscription_id:
+          subscriptionId ||
+          null,
 
-      stripe_invoice_id:
-        invoiceId ||
-        null,
-    })
-    .select('id')
-    .single()
+        stripe_invoice_id:
+          invoiceId ||
+          null,
+      })
+      .select(
+        'id'
+      )
+      .single()
 
   if (
     insertError ||
     !inserted
   ) {
     /*
-     * Unique violation = webhook duplicate.
+     * Duplicate webhook.
      */
 
     if (
-      insertError?.code ===
+      insertError
+        ?.code ===
       '23505'
     ) {
       return
     }
 
     throw new Error(
-      insertError?.message ||
+      insertError
+        ?.message ||
         'Unable to create donation.'
     )
   }
 
-  /*
-   * Fee KHÔNG cộng vào raised.
-   * Chỉ amount_cents là số tiền campaign nhận.
-   */
+  /* =========================
+     UPDATE CAMPAIGN
+  ========================= */
 
   await incrementCampaignRaised(
     campaignId,
     amountCents
   )
+
+  /* =========================
+     EMAIL
+  ========================= */
+
+  await sendConfirmationForDonation(
+    inserted.id
+  )
 }
 
-/*
- * ONE-TIME
- */
+/* =========================================================
+   ONE-TIME
+========================================================= */
 
 async function handleCheckoutCompleted(
   session:
     Stripe.Checkout.Session
 ) {
   /*
+   * Monthly không tạo donation
+   * tại checkout.session.completed.
+   *
    * Monthly được xử lý bằng invoice.paid.
    */
 
@@ -543,7 +806,8 @@ async function handleCheckoutCompleted(
   if (
     session.mode !==
       'payment' ||
-    session.payment_status !==
+    session
+      .payment_status !==
       'paid'
   ) {
     return
@@ -555,10 +819,14 @@ async function handleCheckoutCompleted(
     )
 
   const paymentIntentId =
-    typeof session.payment_intent ===
+    typeof session
+      .payment_intent ===
     'string'
-      ? session.payment_intent
-      : session.payment_intent?.id ||
+      ? session
+          .payment_intent
+      : session
+          .payment_intent
+          ?.id ||
         null
 
   await createDonation({
@@ -581,18 +849,17 @@ async function handleCheckoutCompleted(
   })
 }
 
-/*
- * MONTHLY
- */
+/* =========================================================
+   MONTHLY - INVOICE PAID
+========================================================= */
 
 async function handleInvoicePaid(
-  invoice: Stripe.Invoice
+  invoice:
+    Stripe.Invoice
 ) {
-  // =========================
-  // GET SUBSCRIPTION ID
-  // Stripe API 2025+:
-  // invoice.parent.subscription_details.subscription
-  // =========================
+  /* =========================
+     GET SUBSCRIPTION ID
+  ========================= */
 
   const parent =
     invoice.parent
@@ -606,31 +873,48 @@ async function handleInvoicePaid(
   }
 
   const subscriptionValue =
-    parent.subscription_details
+    parent
+      .subscription_details
       ?.subscription
 
   const subscriptionId =
     typeof subscriptionValue ===
     'string'
       ? subscriptionValue
-      : subscriptionValue?.id
+      : subscriptionValue
+          ?.id
 
   if (!subscriptionId) {
     return
   }
 
-  // =========================
-  // LOAD SUBSCRIPTION
-  // =========================
+  /* =========================
+     LOAD SUBSCRIPTION
+  ========================= */
 
   const subscription =
-    await stripe.subscriptions.retrieve(
-      subscriptionId
-    )
+    await stripe
+      .subscriptions
+      .retrieve(
+        subscriptionId
+      )
+
+  /* =========================
+     SYNC SUBSCRIPTION
+  ========================= */
+
+  await syncMonthlySubscription(
+    subscription
+  )
+
+  /* =========================
+     METADATA
+  ========================= */
 
   const metadata =
     parseDonationMetadata(
-      subscription.metadata
+      subscription
+        .metadata
     )
 
   if (
@@ -640,45 +924,50 @@ async function handleInvoicePaid(
     return
   }
 
-  // =========================
-  // GET PAYMENT INTENT
-  // New Invoice API no longer
-  // exposes invoice.payment_intent
-  // directly.
-  // =========================
+  /* =========================
+     PAYMENT INTENT
+  ========================= */
 
   let paymentIntentId:
     | string
-    | null = null
+    | null =
+    null
 
   try {
     const invoicePayments =
-      await stripe.invoicePayments.list({
-        invoice:
-          invoice.id,
+      await stripe
+        .invoicePayments
+        .list({
+          invoice:
+            invoice.id,
 
-        status:
-          'paid',
-      })
+          status:
+            'paid',
+        })
 
     const paidPayment =
-      invoicePayments.data.find(
-        (item) =>
-          item.payment.type ===
-            'payment_intent' &&
-          item.payment
-            .payment_intent
-      )
+      invoicePayments
+        .data
+        .find(
+          (item) =>
+            item.payment
+              .type ===
+              'payment_intent' &&
+            item.payment
+              .payment_intent
+        )
 
     const paymentIntent =
-      paidPayment?.payment
+      paidPayment
+        ?.payment
         .payment_intent
 
     paymentIntentId =
       typeof paymentIntent ===
       'string'
         ? paymentIntent
-        : paymentIntent?.id ||
+        : paymentIntent
+            ?.id ||
           null
   } catch (error) {
     console.error(
@@ -687,16 +976,17 @@ async function handleInvoicePaid(
     )
   }
 
-  // =========================
-  // CREATE DONATION
-  // =========================
+  /* =========================
+     CREATE MONTHLY DONATION
+  ========================= */
 
   await createDonation({
     metadata,
 
     currency:
       invoice.currency ||
-      subscription.currency ||
+      subscription
+        .currency ||
       'usd',
 
     checkoutSessionId:
@@ -711,8 +1001,40 @@ async function handleInvoicePaid(
   })
 }
 
+/* =========================================================
+   SUBSCRIPTION CREATED / UPDATED / DELETED
+========================================================= */
+
+async function handleSubscriptionChanged(
+  subscription:
+    Stripe.Subscription
+) {
+  /*
+   * Chỉ sync subscription
+   * thuộc hệ thống HopeFund.
+   */
+
+  if (
+    subscription
+      .metadata
+      ?.frequency !==
+    'monthly'
+  ) {
+    return
+  }
+
+  await syncMonthlySubscription(
+    subscription
+  )
+}
+
+/* =========================================================
+   STRIPE WEBHOOK
+========================================================= */
+
 export async function POST(
-  request: NextRequest
+  request:
+    NextRequest
 ) {
   const signature =
     request.headers.get(
@@ -720,15 +1042,16 @@ export async function POST(
     )
 
   if (!signature) {
-    return NextResponse.json(
-      {
-        error:
-          'Missing Stripe signature.',
-      },
-      {
-        status: 400,
-      }
-    )
+    return NextResponse
+      .json(
+        {
+          error:
+            'Missing Stripe signature.',
+        },
+        {
+          status: 400,
+        }
+      )
   }
 
   const webhookSecret =
@@ -736,61 +1059,76 @@ export async function POST(
       .STRIPE_WEBHOOK_SECRET
 
   if (!webhookSecret) {
-    return NextResponse.json(
-      {
-        error:
-          'Missing STRIPE_WEBHOOK_SECRET.',
-      },
-      {
-        status: 500,
-      }
-    )
+    return NextResponse
+      .json(
+        {
+          error:
+            'Missing STRIPE_WEBHOOK_SECRET.',
+        },
+        {
+          status: 500,
+        }
+      )
   }
 
   let event:
     Stripe.Event
 
+  /* =========================
+     VERIFY SIGNATURE
+  ========================= */
+
   try {
     /*
-     * Stripe cần RAW request body.
+     * Stripe cần raw body.
      */
 
     const body =
       await request.text()
 
     event =
-      stripe.webhooks.constructEvent(
-        body,
-        signature,
-        webhookSecret
-      )
+      stripe
+        .webhooks
+        .constructEvent(
+          body,
+          signature,
+          webhookSecret
+        )
   } catch (error) {
     console.error(
       'Stripe signature error:',
       error
     )
 
-    return NextResponse.json(
-      {
-        error:
-          'Invalid webhook signature.',
-      },
-      {
-        status: 400,
-      }
-    )
+    return NextResponse
+      .json(
+        {
+          error:
+            'Invalid webhook signature.',
+        },
+        {
+          status: 400,
+        }
+      )
   }
 
+  /* =========================
+     HANDLE EVENTS
+  ========================= */
+
   try {
-    switch (event.type) {
-      /*
-       * ONE-TIME
-       */
+    switch (
+      event.type
+    ) {
+      /* -------------------------
+         ONE-TIME
+      ------------------------- */
 
       case 'checkout.session.completed': {
         const session =
           event.data
-            .object as Stripe.Checkout.Session
+            .object as
+            Stripe.Checkout.Session
 
         await handleCheckoutCompleted(
           session
@@ -799,15 +1137,15 @@ export async function POST(
         break
       }
 
-      /*
-       * MONTHLY:
-       * first payment + renewals
-       */
+      /* -------------------------
+         MONTHLY PAYMENT
+      ------------------------- */
 
       case 'invoice.paid': {
         const invoice =
           event.data
-            .object as Stripe.Invoice
+            .object as
+            Stripe.Invoice
 
         await handleInvoicePaid(
           invoice
@@ -816,14 +1154,67 @@ export async function POST(
         break
       }
 
-      /*
-       * Later we can store failure status.
-       */
+      /* -------------------------
+         SUBSCRIPTION CREATED
+      ------------------------- */
+
+      case 'customer.subscription.created': {
+        const subscription =
+          event.data
+            .object as
+            Stripe.Subscription
+
+        await handleSubscriptionChanged(
+          subscription
+        )
+
+        break
+      }
+
+      /* -------------------------
+         SUBSCRIPTION UPDATED
+      ------------------------- */
+
+      case 'customer.subscription.updated': {
+        const subscription =
+          event.data
+            .object as
+            Stripe.Subscription
+
+        await handleSubscriptionChanged(
+          subscription
+        )
+
+        break
+      }
+
+      /* -------------------------
+         SUBSCRIPTION DELETED
+      ------------------------- */
+
+      case 'customer.subscription.deleted': {
+        const subscription =
+          event.data
+            .object as
+            Stripe.Subscription
+
+        await handleSubscriptionChanged(
+          subscription
+        )
+
+        break
+      }
+
+      /* -------------------------
+         PAYMENT FAILED
+         Phase 6 sẽ xử lý DB
+      ------------------------- */
 
       case 'invoice.payment_failed': {
         const invoice =
           event.data
-            .object as Stripe.Invoice
+            .object as
+            Stripe.Invoice
 
         console.warn(
           'Monthly payment failed:',
@@ -837,9 +1228,10 @@ export async function POST(
         break
     }
 
-    return NextResponse.json({
-      received: true,
-    })
+    return NextResponse
+      .json({
+        received: true,
+      })
   } catch (error) {
     console.error(
       `Webhook ${event.type} failed:`,
@@ -847,19 +1239,22 @@ export async function POST(
     )
 
     /*
-     * Return 500 so Stripe retries.
+     * Trả 500 để Stripe
+     * retry webhook.
      */
 
-    return NextResponse.json(
-      {
-        error:
-          error instanceof Error
-            ? error.message
-            : 'Webhook failed.',
-      },
-      {
-        status: 500,
-      }
-    )
+    return NextResponse
+      .json(
+        {
+          error:
+            error instanceof
+            Error
+              ? error.message
+              : 'Webhook failed.',
+        },
+        {
+          status: 500,
+        }
+      )
   }
 }
