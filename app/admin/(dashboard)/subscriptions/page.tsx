@@ -20,9 +20,11 @@ type Campaign = {
 type Donor = {
   id: string
   email: string
+
   first_name:
     | string
     | null
+
   last_name:
     | string
     | null
@@ -61,7 +63,20 @@ type Subscription = {
     | string
     | null
 
-  created_at: string
+  last_payment_failed_at:
+    | string
+    | null
+
+  last_failed_invoice_id:
+    | string
+    | null
+
+  next_payment_attempt:
+    | string
+    | null
+
+  created_at:
+    string
 
   campaign:
     | Campaign
@@ -128,12 +143,36 @@ function date(
   )
 }
 
+function dateTime(
+  value:
+    | string
+    | null
+) {
+  if (!value) {
+    return '—'
+  }
+
+  return new Intl.DateTimeFormat(
+    'en-US',
+    {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+    }
+  ).format(
+    new Date(value)
+  )
+}
+
 function StatusBadge({
   status,
   cancelAtPeriodEnd,
 }: {
   status: string
-  cancelAtPeriodEnd: boolean
+  cancelAtPeriodEnd:
+    boolean
 }) {
   if (
     cancelAtPeriodEnd &&
@@ -199,50 +238,55 @@ export default async function SubscriptionsPage() {
   const {
     data,
     error,
-  } = await supabase
-    .from(
-      'monthly_subscriptions'
-    )
-    .select(`
-      id,
-
-      stripe_subscription_id,
-      stripe_customer_id,
-
-      status,
-      currency,
-
-      amount_cents,
-      fee_amount_cents,
-      total_amount_cents,
-
-      cancel_at_period_end,
-
-      current_period_start,
-      current_period_end,
-      canceled_at,
-
-      created_at,
-
-      campaign:campaigns (
-        id,
-        title,
-        slug
-      ),
-
-      donor:donors (
-        id,
-        email,
-        first_name,
-        last_name
+  } =
+    await supabase
+      .from(
+        'monthly_subscriptions'
       )
-    `)
-    .order(
-      'created_at',
-      {
-        ascending: false,
-      }
-    )
+      .select(`
+        id,
+
+        stripe_subscription_id,
+        stripe_customer_id,
+
+        status,
+        currency,
+
+        amount_cents,
+        fee_amount_cents,
+        total_amount_cents,
+
+        cancel_at_period_end,
+
+        current_period_start,
+        current_period_end,
+        canceled_at,
+
+        last_payment_failed_at,
+        last_failed_invoice_id,
+        next_payment_attempt,
+
+        created_at,
+
+        campaign:campaigns (
+          id,
+          title,
+          slug
+        ),
+
+        donor:donors (
+          id,
+          email,
+          first_name,
+          last_name
+        )
+      `)
+      .order(
+        'created_at',
+        {
+          ascending: false,
+        }
+      )
 
   const subscriptions =
     (data ??
@@ -254,7 +298,9 @@ export default async function SubscriptionsPage() {
         item.status ===
           'active' &&
         !item
-          .cancel_at_period_end
+          .cancel_at_period_end &&
+        !item
+          .last_payment_failed_at
     ).length
 
   const canceling =
@@ -273,9 +319,13 @@ export default async function SubscriptionsPage() {
         'canceled'
     ).length
 
-  const pastDue =
+  const paymentIssues =
     subscriptions.filter(
       (item) =>
+        Boolean(
+          item
+            .last_payment_failed_at
+        ) ||
         item.status ===
           'past_due' ||
         item.status ===
@@ -299,7 +349,8 @@ export default async function SubscriptionsPage() {
 
             <p className="mt-2 text-sm text-neutral-500">
               Monitor recurring
-              donors, renewal
+              donors, payment
+              failures, renewal
               periods and
               cancellation status.
             </p>
@@ -329,6 +380,40 @@ export default async function SubscriptionsPage() {
           </div>
         )}
 
+        {/* PAYMENT ISSUE WARNING */}
+
+        {paymentIssues >
+          0 && (
+          <div className="mt-6 rounded-xl border border-red-200 bg-red-50 p-5">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-red-100 font-bold text-red-700">
+                !
+              </div>
+
+              <div>
+                <p className="font-bold text-red-800">
+                  Payment attention
+                  required
+                </p>
+
+                <p className="mt-1 text-sm leading-6 text-red-700">
+                  {
+                    paymentIssues
+                  }{' '}
+                  monthly
+                  subscription
+                  {paymentIssues ===
+                  1
+                    ? ''
+                    : 's'}{' '}
+                  currently have a
+                  payment issue.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* STATS */}
 
         <div className="mt-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -352,13 +437,13 @@ export default async function SubscriptionsPage() {
             </p>
           </div>
 
-          <div className="rounded-xl border border-neutral-200 bg-white p-5">
-            <p className="text-sm text-neutral-500">
-              Past due
+          <div className="rounded-xl border border-red-200 bg-red-50 p-5">
+            <p className="text-sm text-red-600">
+              Payment issues
             </p>
 
-            <p className="mt-2 text-3xl font-bold">
-              {pastDue}
+            <p className="mt-2 text-3xl font-bold text-red-800">
+              {paymentIssues}
             </p>
           </div>
 
@@ -406,7 +491,7 @@ export default async function SubscriptionsPage() {
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[1250px]">
+              <table className="w-full min-w-[1300px]">
                 <thead className="bg-neutral-50">
                   <tr>
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-neutral-500">
@@ -426,7 +511,7 @@ export default async function SubscriptionsPage() {
                     </th>
 
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-neutral-500">
-                      Next renewal
+                      Billing
                     </th>
 
                     <th className="px-5 py-3 text-left text-xs font-semibold uppercase text-neutral-500">
@@ -441,7 +526,9 @@ export default async function SubscriptionsPage() {
 
                 <tbody>
                   {subscriptions.map(
-                    (subscription) => {
+                    (
+                      subscription
+                    ) => {
                       const donor =
                         relation(
                           subscription.donor
@@ -455,13 +542,25 @@ export default async function SubscriptionsPage() {
                       const name =
                         `${donor?.first_name || ''} ${donor?.last_name || ''}`.trim()
 
+                      const hasFailure =
+                        Boolean(
+                          subscription
+                            .last_payment_failed_at
+                        )
+
                       return (
                         <tr
                           key={
                             subscription.id
                           }
-                          className="border-t border-neutral-100"
+                          className={`border-t ${
+                            hasFailure
+                              ? 'border-red-100 bg-red-50/30'
+                              : 'border-neutral-100'
+                          }`}
                         >
+                          {/* DONOR */}
+
                           <td className="px-5 py-4">
                             <p className="font-semibold text-neutral-900">
                               {name ||
@@ -473,6 +572,8 @@ export default async function SubscriptionsPage() {
                                 '—'}
                             </p>
                           </td>
+
+                          {/* CAMPAIGN */}
 
                           <td className="px-5 py-4">
                             {campaign ? (
@@ -490,6 +591,8 @@ export default async function SubscriptionsPage() {
                               </span>
                             )}
                           </td>
+
+                          {/* AMOUNT */}
 
                           <td className="px-5 py-4">
                             <p className="font-bold text-neutral-900">
@@ -512,6 +615,8 @@ export default async function SubscriptionsPage() {
                             )}
                           </td>
 
+                          {/* STATUS */}
+
                           <td className="px-5 py-4">
                             <StatusBadge
                               status={
@@ -521,25 +626,63 @@ export default async function SubscriptionsPage() {
                                 subscription.cancel_at_period_end
                               }
                             />
-                          </td>
 
-                          <td className="px-5 py-4">
-                            <p className="text-sm text-neutral-700">
-                              {subscription.status ===
-                              'canceled'
-                                ? '—'
-                                : date(
-                                    subscription.current_period_end
-                                  )}
-                            </p>
-
-                            {subscription.cancel_at_period_end && (
-                              <p className="mt-1 text-xs text-amber-600">
-                                Ends on this
-                                date
-                              </p>
+                            {hasFailure && (
+                              <span className="ml-2 inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-semibold text-red-700">
+                                Payment failed
+                              </span>
                             )}
                           </td>
+
+                          {/* BILLING */}
+
+                          <td className="px-5 py-4">
+                            {hasFailure ? (
+                              <>
+                                <p className="text-sm font-semibold text-red-600">
+                                  Payment
+                                  failed
+                                </p>
+
+                                <p className="mt-1 text-xs text-neutral-500">
+                                  {
+                                    dateTime(
+                                      subscription.last_payment_failed_at
+                                    )
+                                  }
+                                </p>
+
+                                {subscription.next_payment_attempt && (
+                                  <p className="mt-1 text-xs font-semibold text-amber-600">
+                                    Retry:{' '}
+                                    {dateTime(
+                                      subscription.next_payment_attempt
+                                    )}
+                                  </p>
+                                )}
+                              </>
+                            ) : (
+                              <>
+                                <p className="text-sm text-neutral-700">
+                                  {subscription.status ===
+                                  'canceled'
+                                    ? '—'
+                                    : date(
+                                        subscription.current_period_end
+                                      )}
+                                </p>
+
+                                {subscription.cancel_at_period_end && (
+                                  <p className="mt-1 text-xs text-amber-600">
+                                    Ends on
+                                    this date
+                                  </p>
+                                )}
+                              </>
+                            )}
+                          </td>
+
+                          {/* STRIPE */}
 
                           <td className="px-5 py-4">
                             <p className="max-w-[180px] truncate font-mono text-[10px] text-neutral-400">
@@ -547,7 +690,17 @@ export default async function SubscriptionsPage() {
                                 subscription.stripe_subscription_id
                               }
                             </p>
+
+                            {subscription.last_failed_invoice_id && (
+                              <p className="mt-1 max-w-[180px] truncate font-mono text-[10px] text-red-400">
+                                {
+                                  subscription.last_failed_invoice_id
+                                }
+                              </p>
+                            )}
                           </td>
+
+                          {/* ACTIONS */}
 
                           <td className="px-5 py-4">
                             <div className="flex justify-end gap-2">

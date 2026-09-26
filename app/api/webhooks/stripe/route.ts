@@ -21,6 +21,12 @@ import {
   syncMonthlySubscription,
 } from '@/lib/subscriptions'
 
+import {
+  getInvoiceSubscriptionId,
+  handleMonthlyPaymentFailed,
+  markMonthlyPaymentRecovered,
+} from '@/lib/payment-failures'
+
 export const runtime =
   'nodejs'
 
@@ -60,6 +66,10 @@ function metadataBoolean(
   return value === 'true'
 }
 
+/* =========================================================
+   DONOR
+========================================================= */
+
 async function getOrCreateDonor(
   metadata: DonationMetadata
 ) {
@@ -76,36 +86,41 @@ async function getOrCreateDonor(
 
   const firstName =
     String(
-      metadata.donor_first_name ||
+      metadata
+        .donor_first_name ||
         ''
     ).trim()
 
   const lastName =
     String(
-      metadata.donor_last_name ||
+      metadata
+        .donor_last_name ||
         ''
     ).trim()
 
   const phone =
     String(
-      metadata.donor_phone ||
+      metadata
+        .donor_phone ||
         ''
     ).trim()
 
   const {
     data: existing,
-    error: existingError,
-  } = await supabaseAdmin
-    .from('donors')
-    .select(`
-      id,
-      email
-    `)
-    .eq(
-      'email',
-      email
-    )
-    .maybeSingle()
+    error:
+      existingError,
+  } =
+    await supabaseAdmin
+      .from('donors')
+      .select(`
+        id,
+        email
+      `)
+      .eq(
+        'email',
+        email
+      )
+      .maybeSingle()
 
   if (existingError) {
     throw new Error(
@@ -115,7 +130,8 @@ async function getOrCreateDonor(
 
   if (existing) {
     const {
-      error: updateError,
+      error:
+        updateError,
     } =
       await supabaseAdmin
         .from('donors')
@@ -152,28 +168,28 @@ async function getOrCreateDonor(
 
   const {
     data: created,
-    error: createError,
-  } = await supabaseAdmin
-    .from('donors')
-    .insert({
-      email,
+    error:
+      createError,
+  } =
+    await supabaseAdmin
+      .from('donors')
+      .insert({
+        email,
 
-      first_name:
-        firstName ||
-        null,
+        first_name:
+          firstName ||
+          null,
 
-      last_name:
-        lastName ||
-        null,
+        last_name:
+          lastName ||
+          null,
 
-      phone:
-        phone ||
-        null,
-    })
-    .select(
-      'id'
-    )
-    .single()
+        phone:
+          phone ||
+          null,
+      })
+      .select('id')
+      .single()
 
   if (
     createError ||
@@ -188,6 +204,10 @@ async function getOrCreateDonor(
 
   return created.id
 }
+
+/* =========================================================
+   METADATA
+========================================================= */
 
 function parseDonationMetadata(
   metadata:
@@ -246,7 +266,8 @@ function parseDonationMetadata(
 }
 
 function validateMetadata(
-  metadata: DonationMetadata
+  metadata:
+    DonationMetadata
 ) {
   const campaignId =
     String(
@@ -303,31 +324,38 @@ function validateMetadata(
   }
 }
 
+/* =========================================================
+   RAISED
+========================================================= */
+
 async function incrementCampaignRaised(
   campaignId: string,
   amountCents: number
 ) {
   /*
-   * Hiện tại vẫn dùng:
-   * read -> update.
+   * Hiện tại:
    *
-   * Phase sau sẽ đổi sang
-   * Postgres RPC atomic.
+   * SELECT
+   * -> UPDATE
+   *
+   * Phase 7 sẽ đổi sang
+   * PostgreSQL atomic RPC.
    */
 
   const {
     data: campaign,
     error,
-  } = await supabaseAdmin
-    .from('campaigns')
-    .select(
-      'raised_amount_cents'
-    )
-    .eq(
-      'id',
-      campaignId
-    )
-    .single()
+  } =
+    await supabaseAdmin
+      .from('campaigns')
+      .select(
+        'raised_amount_cents'
+      )
+      .eq(
+        'id',
+        campaignId
+      )
+      .single()
 
   if (
     error ||
@@ -374,7 +402,7 @@ async function incrementCampaignRaised(
 }
 
 /* =========================================================
-   DONATION CONFIRMATION EMAIL
+   CONFIRMATION EMAIL
 ========================================================= */
 
 async function sendConfirmationForDonation(
@@ -383,39 +411,40 @@ async function sendConfirmationForDonation(
   const {
     data: donation,
     error,
-  } = await supabaseAdmin
-    .from('donations')
-    .select(`
-      id,
+  } =
+    await supabaseAdmin
+      .from('donations')
+      .select(`
+        id,
 
-      donor_id,
+        donor_id,
 
-      amount_cents,
-      fee_amount_cents,
-      total_amount_cents,
+        amount_cents,
+        fee_amount_cents,
+        total_amount_cents,
 
-      currency,
-      frequency,
+        currency,
+        frequency,
 
-      confirmation_email_sent_at,
+        confirmation_email_sent_at,
 
-      created_at,
+        created_at,
 
-      campaign:campaigns (
-        title,
-        slug
-      ),
+        campaign:campaigns (
+          title,
+          slug
+        ),
 
-      donor:donors (
-        email,
-        first_name
+        donor:donors (
+          email,
+          first_name
+        )
+      `)
+      .eq(
+        'id',
+        donationId
       )
-    `)
-    .eq(
-      'id',
-      donationId
-    )
-    .single()
+      .single()
 
   if (
     error ||
@@ -477,13 +506,16 @@ async function sendConfirmationForDonation(
         campaign.slug,
 
       amountCents:
-        donation.amount_cents,
+        donation
+          .amount_cents,
 
       feeAmountCents:
-        donation.fee_amount_cents,
+        donation
+          .fee_amount_cents,
 
       totalAmountCents:
-        donation.total_amount_cents,
+        donation
+          .total_amount_cents,
 
       currency:
         donation.currency,
@@ -536,7 +568,8 @@ async function createDonation({
   metadata:
     DonationMetadata
 
-  currency: string
+  currency:
+    string
 
   checkoutSessionId?:
     | string
@@ -563,9 +596,9 @@ async function createDonation({
       metadata
     )
 
-  /* =========================
-     IDEMPOTENCY - INVOICE
-  ========================= */
+  // =========================
+  // IDEMPOTENCY - INVOICE
+  // =========================
 
   if (invoiceId) {
     const {
@@ -575,9 +608,7 @@ async function createDonation({
         .from(
           'donations'
         )
-        .select(
-          'id'
-        )
+        .select('id')
         .eq(
           'stripe_invoice_id',
           invoiceId
@@ -593,9 +624,9 @@ async function createDonation({
     }
   }
 
-  /* =========================
-     IDEMPOTENCY - PAYMENT
-  ========================= */
+  // =========================
+  // IDEMPOTENCY - PAYMENT
+  // =========================
 
   if (
     paymentIntentId
@@ -607,9 +638,7 @@ async function createDonation({
         .from(
           'donations'
         )
-        .select(
-          'id'
-        )
+        .select('id')
         .eq(
           'stripe_payment_intent_id',
           paymentIntentId
@@ -625,9 +654,9 @@ async function createDonation({
     }
   }
 
-  /* =========================
-     DONOR
-  ========================= */
+  // =========================
+  // DONOR
+  // =========================
 
   const donorId =
     await getOrCreateDonor(
@@ -666,9 +695,9 @@ async function createDonation({
       ? 'monthly'
       : 'one_time'
 
-  /* =========================
-     INSERT DONATION
-  ========================= */
+  // =========================
+  // INSERT
+  // =========================
 
   const {
     data: inserted,
@@ -676,9 +705,7 @@ async function createDonation({
       insertError,
   } =
     await supabaseAdmin
-      .from(
-        'donations'
-      )
+      .from('donations')
       .insert({
         campaign_id:
           campaignId,
@@ -735,19 +762,13 @@ async function createDonation({
           invoiceId ||
           null,
       })
-      .select(
-        'id'
-      )
+      .select('id')
       .single()
 
   if (
     insertError ||
     !inserted
   ) {
-    /*
-     * Duplicate webhook.
-     */
-
     if (
       insertError
         ?.code ===
@@ -763,18 +784,18 @@ async function createDonation({
     )
   }
 
-  /* =========================
-     UPDATE CAMPAIGN
-  ========================= */
+  // =========================
+  // RAISED
+  // =========================
 
   await incrementCampaignRaised(
     campaignId,
     amountCents
   )
 
-  /* =========================
-     EMAIL
-  ========================= */
+  // =========================
+  // EMAIL
+  // =========================
 
   await sendConfirmationForDonation(
     inserted.id
@@ -790,10 +811,8 @@ async function handleCheckoutCompleted(
     Stripe.Checkout.Session
 ) {
   /*
-   * Monthly không tạo donation
-   * tại checkout.session.completed.
-   *
-   * Monthly được xử lý bằng invoice.paid.
+   * Monthly payment được xử lý
+   * bằng invoice.paid.
    */
 
   if (
@@ -850,47 +869,29 @@ async function handleCheckoutCompleted(
 }
 
 /* =========================================================
-   MONTHLY - INVOICE PAID
+   MONTHLY INVOICE PAID
 ========================================================= */
 
 async function handleInvoicePaid(
   invoice:
     Stripe.Invoice
 ) {
-  /* =========================
-     GET SUBSCRIPTION ID
-  ========================= */
-
-  const parent =
-    invoice.parent
-
-  if (
-    !parent ||
-    parent.type !==
-      'subscription_details'
-  ) {
-    return
-  }
-
-  const subscriptionValue =
-    parent
-      .subscription_details
-      ?.subscription
-
   const subscriptionId =
-    typeof subscriptionValue ===
-    'string'
-      ? subscriptionValue
-      : subscriptionValue
-          ?.id
+    getInvoiceSubscriptionId(
+      invoice
+    )
+
+  /*
+   * Không phải subscription invoice.
+   */
 
   if (!subscriptionId) {
     return
   }
 
-  /* =========================
-     LOAD SUBSCRIPTION
-  ========================= */
+  // =========================
+  // LOAD SUBSCRIPTION
+  // =========================
 
   const subscription =
     await stripe
@@ -899,17 +900,9 @@ async function handleInvoicePaid(
         subscriptionId
       )
 
-  /* =========================
-     SYNC SUBSCRIPTION
-  ========================= */
-
-  await syncMonthlySubscription(
-    subscription
-  )
-
-  /* =========================
-     METADATA
-  ========================= */
+  // =========================
+  // ONLY MONTHLY DONATIONS
+  // =========================
 
   const metadata =
     parseDonationMetadata(
@@ -924,9 +917,26 @@ async function handleInvoicePaid(
     return
   }
 
-  /* =========================
-     PAYMENT INTENT
-  ========================= */
+  // =========================
+  // SYNC SUBSCRIPTION
+  // =========================
+
+  await syncMonthlySubscription(
+    subscription
+  )
+
+  // =========================
+  // RECOVER PREVIOUS FAILURE
+  // =========================
+
+  await markMonthlyPaymentRecovered(
+    invoice,
+    subscriptionId
+  )
+
+  // =========================
+  // PAYMENT INTENT
+  // =========================
 
   let paymentIntentId:
     | string
@@ -976,9 +986,9 @@ async function handleInvoicePaid(
     )
   }
 
-  /* =========================
-     CREATE MONTHLY DONATION
-  ========================= */
+  // =========================
+  // CREATE DONATION
+  // =========================
 
   await createDonation({
     metadata,
@@ -1002,18 +1012,13 @@ async function handleInvoicePaid(
 }
 
 /* =========================================================
-   SUBSCRIPTION CREATED / UPDATED / DELETED
+   SUBSCRIPTION CHANGE
 ========================================================= */
 
 async function handleSubscriptionChanged(
   subscription:
     Stripe.Subscription
 ) {
-  /*
-   * Chỉ sync subscription
-   * thuộc hệ thống HopeFund.
-   */
-
   if (
     subscription
       .metadata
@@ -1029,7 +1034,7 @@ async function handleSubscriptionChanged(
 }
 
 /* =========================================================
-   STRIPE WEBHOOK
+   WEBHOOK
 ========================================================= */
 
 export async function POST(
@@ -1074,15 +1079,11 @@ export async function POST(
   let event:
     Stripe.Event
 
-  /* =========================
-     VERIFY SIGNATURE
-  ========================= */
+  // =========================
+  // VERIFY STRIPE SIGNATURE
+  // =========================
 
   try {
-    /*
-     * Stripe cần raw body.
-     */
-
     const body =
       await request.text()
 
@@ -1112,9 +1113,9 @@ export async function POST(
       )
   }
 
-  /* =========================
-     HANDLE EVENTS
-  ========================= */
+  // =========================
+  // EVENTS
+  // =========================
 
   try {
     switch (
@@ -1138,7 +1139,7 @@ export async function POST(
       }
 
       /* -------------------------
-         MONTHLY PAYMENT
+         MONTHLY PAID
       ------------------------- */
 
       case 'invoice.paid': {
@@ -1148,6 +1149,23 @@ export async function POST(
             Stripe.Invoice
 
         await handleInvoicePaid(
+          invoice
+        )
+
+        break
+      }
+
+      /* -------------------------
+         PAYMENT FAILED
+      ------------------------- */
+
+      case 'invoice.payment_failed': {
+        const invoice =
+          event.data
+            .object as
+            Stripe.Invoice
+
+        await handleMonthlyPaymentFailed(
           invoice
         )
 
@@ -1205,25 +1223,6 @@ export async function POST(
         break
       }
 
-      /* -------------------------
-         PAYMENT FAILED
-         Phase 6 sẽ xử lý DB
-      ------------------------- */
-
-      case 'invoice.payment_failed': {
-        const invoice =
-          event.data
-            .object as
-            Stripe.Invoice
-
-        console.warn(
-          'Monthly payment failed:',
-          invoice.id
-        )
-
-        break
-      }
-
       default:
         break
     }
@@ -1239,8 +1238,7 @@ export async function POST(
     )
 
     /*
-     * Trả 500 để Stripe
-     * retry webhook.
+     * 500 để Stripe retry.
      */
 
     return NextResponse
